@@ -10,7 +10,7 @@ exports.fetchAllBrands = async (req, res) => {
 };
 
 exports.createBrand = async (req, res) => {
-  const brand = Brand(req.body);
+  const brand = new Brand(req.body);
 
   try {
     const doc = await brand.save();
