@@ -1,6 +1,8 @@
 const express = require("express");
+require("dotenv").config();
 const server = express();
 const cors = require("cors");
+const { connectDB } = require("./data/database.js");
 const session = require("express-session");
 const passport = require("passport");
 const mongoose = require("mongoose");
@@ -23,28 +25,59 @@ const {
 } = require("./services/common.js");
 const LocalStrategy = require("passport-local").Strategy;
 const jwt = require("jsonwebtoken");
+const path = require("path");
 
-const SECRET_KEY = "SECRET_KEY";
+const endpointSecret = process.env.ENDPOINT_SECRET;
+
+//Webhook
+
+server.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  (request, response) => {
+    const sig = request.headers["stripe-signature"];
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
+    } catch (err) {
+      response.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    // Handle the event
+    switch (event.type) {
+      case "payment_intent.succeeded":
+        const paymentIntentSucceeded = event.data.object;
+        // Then define and call a function to handle the event payment_intent.succeeded
+        break;
+      // ... handle other event types
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    // Return a 200 response to acknowledge receipt of the event
+    response.send();
+  }
+);
 
 //JWT options
 var opts = {};
 opts.jwtFromRequest = cookieExtracter;
-opts.secretOrKey = SECRET_KEY;
+opts.secretOrKey = process.env.JWT_SECRET_KEY;
 
 // middlewares:
-server.use(express.static("build"));
+server.use(express.static(path.resolve(__dirname, "build")));
 server.use(cookieParser());
 server.use(
   cors({
     exposedHeaders: ["X-Total-Count"],
-    origin: "http://localhost:3000",
-    methods: ["GET", "POST", "PATCH", "DELETE"],
-    credentials: "include",
   })
 );
 server.use(
   session({
-    secret: "keyboard cat",
+    secret: process.env.SESSION_SECRET_KEY,
     resave: false, // don't save session if unmodified
     saveUninitialized: false, // don't create session until something stored
   })
@@ -69,6 +102,7 @@ passport.use(
     done
   ) {
     // by default passport uses username
+    console.log({ email, password });
     try {
       const user = await User.findOne({ email: email });
       console.log(email, password, user);
@@ -85,8 +119,11 @@ passport.use(
           if (!crypto.timingSafeEqual(user.password, hashedPassword)) {
             return done(null, false, { message: "invalid credentials" });
           }
-          const token = jwt.sign(sanitizeUser(user), SECRET_KEY);
-          done(null, { id: user.id, role: user.role }); // this lines sends to serializer
+          const token = jwt.sign(
+            sanitizeUser(user),
+            process.env.JWT_SECRET_KEY
+          );
+          done(null, { id: user.id, role: user.role, token }); // this lines sends to serializer
         }
       );
     } catch (err) {
@@ -112,30 +149,41 @@ passport.use(
 );
 
 passport.serializeUser(function (user, cb) {
-  // Creating the session variable on req.user callled
   process.nextTick(function () {
     return cb(null, { id: user.id, role: user.role });
   });
 });
 
 passport.deserializeUser(function (user, cb) {
-  // creates user from session variable
   process.nextTick(function () {
     return cb(null, user);
   });
 });
 
-async function connectDB() {
-  await mongoose.connect(
-    "mongodb+srv://rishiustaad:Kumar%401234@cluster0.f63n5tv.mongodb.net/",
-    {
-      dbName: "E-CommerceAPI",
-    }
-  );
-  console.log("Database connected");
-}
+// Payment
 
-connectDB().catch((err) => console.log(err));
+const stripe = require("stripe")(process.env.STRIPE_SERVER_KEY);
+
+server.post("/create-payment-intent", async (req, res) => {
+  const { totalAmount } = req.body;
+
+  // Create a PaymentIntent with the order amount and currency
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount: totalAmount * 100,
+    currency: "inr",
+    // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
+    automatic_payment_methods: {
+      enabled: true,
+    },
+  });
+
+  res.send({
+    clientSecret: paymentIntent.client_secret,
+  });
+});
+
+// database connection
+connectDB;
 
 server.get("/", (req, res) => {
   res.json({
@@ -143,6 +191,6 @@ server.get("/", (req, res) => {
   });
 });
 
-server.listen(8080, () => {
+server.listen(process.env.PORT, () => {
   console.log("Sever is working");
 });
