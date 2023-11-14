@@ -26,6 +26,7 @@ const {
 const LocalStrategy = require("passport-local").Strategy;
 const jwt = require("jsonwebtoken");
 const path = require("path");
+const { Order } = require("./models/Order.js");
 
 const endpointSecret = process.env.ENDPOINT_SECRET;
 
@@ -34,7 +35,7 @@ const endpointSecret = process.env.ENDPOINT_SECRET;
 server.post(
   "/webhook",
   express.raw({ type: "application/json" }),
-  (request, response) => {
+  async (request, response) => {
     const sig = request.headers["stripe-signature"];
 
     let event;
@@ -50,7 +51,13 @@ server.post(
     switch (event.type) {
       case "payment_intent.succeeded":
         const paymentIntentSucceeded = event.data.object;
-        // Then define and call a function to handle the event payment_intent.succeeded
+
+        const order = await Order.findById(
+          paymentIntentSucceeded.metadata.orderId
+        );
+        order.paymentStatus = "received";
+        await order.save();
+
         break;
       // ... handle other event types
       default:
@@ -91,6 +98,11 @@ server.use("/brands", isAuth(), brandsRouter.router);
 server.use("/users", isAuth(), userRouter.router);
 server.use("/cart", isAuth(), cartRouter.router);
 server.use("/orders", isAuth(), ordersRouter.router);
+
+// If no path matches then we use this
+server.get("*", (req, res) =>
+  res.sendFile(path.resolve("build", "index.html"))
+);
 
 //passport middleware
 
@@ -165,7 +177,7 @@ passport.deserializeUser(function (user, cb) {
 const stripe = require("stripe")(process.env.STRIPE_SERVER_KEY);
 
 server.post("/create-payment-intent", async (req, res) => {
-  const { totalAmount } = req.body;
+  const { totalAmount, orderId } = req.body;
 
   // Create a PaymentIntent with the order amount and currency
   const paymentIntent = await stripe.paymentIntents.create({
@@ -174,6 +186,9 @@ server.post("/create-payment-intent", async (req, res) => {
     // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
     automatic_payment_methods: {
       enabled: true,
+    },
+    metadata: {
+      order_id: orderId,
     },
   });
 
