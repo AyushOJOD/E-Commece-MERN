@@ -13,6 +13,7 @@ const cookieParser = require("cookie-parser");
 const productsRouter = require("./routes/Products.js");
 const categoriesRouter = require("./routes/Category.js");
 const brandsRouter = require("./routes/Brand.js");
+const nodemailer = require("nodemailer");
 const userRouter = require("./routes/User.js");
 const authRouter = require("./routes/Auth.js");
 const cartRouter = require("./routes/Cart.js");
