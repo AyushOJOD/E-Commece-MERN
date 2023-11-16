@@ -14,6 +14,6 @@ router
   .get("/my", fetchOrderByUser)
   .patch("/:id", updateOrder)
   .delete("/:id", deleteOrder)
-  .get("/", fetchAllOrders);
+  .get("/adminOnly", fetchAllOrders);
 
 exports.router = router;
