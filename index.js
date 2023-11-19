@@ -13,7 +13,6 @@ const cookieParser = require("cookie-parser");
 const productsRouter = require("./routes/Products.js");
 const categoriesRouter = require("./routes/Category.js");
 const brandsRouter = require("./routes/Brand.js");
-const nodemailer = require("nodemailer");
 const userRouter = require("./routes/User.js");
 const authRouter = require("./routes/Auth.js");
 const cartRouter = require("./routes/Cart.js");
@@ -28,7 +27,6 @@ const LocalStrategy = require("passport-local").Strategy;
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const { Order } = require("./models/Order.js");
-
 const endpointSecret = process.env.ENDPOINT_SECRET;
 
 //Webhook
@@ -184,7 +182,6 @@ server.post("/create-payment-intent", async (req, res) => {
   const paymentIntent = await stripe.paymentIntents.create({
     amount: totalAmount * 100,
     currency: "inr",
-    // In the latest version of the API, specifying the `automatic_payment_methods` parameter is optional because Stripe enables its functionality by default.
     automatic_payment_methods: {
       enabled: true,
     },
